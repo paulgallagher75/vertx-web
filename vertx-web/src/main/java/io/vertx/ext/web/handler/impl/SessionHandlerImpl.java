@@ -130,25 +130,30 @@ public class SessionHandlerImpl implements SessionHandler {
 						Session session = res.result();
 						if (session != null) {
 							context.setSession(session);
-							// attempt to load the user from the session
-              UserHolder holder = session.get(SESSION_USER_HOLDER_KEY);
-              if (holder != null) {
-                User user = null;
-                RoutingContext prevContext = holder.context;
-                if (prevContext != null) {
-                  user = prevContext.user();
-                } else if (holder.user != null) {
-                  user = holder.user;
-                  user.setAuthProvider(authProvider);
+							// attempt to load the user from the session if auth provider is known
+              if (authProvider != null) {
+                UserHolder holder = session.get(SESSION_USER_HOLDER_KEY);
+                if (holder != null) {
+                  User user = null;
+                  RoutingContext prevContext = holder.context;
+                  if (prevContext != null) {
+                    user = prevContext.user();
+                  } else if (holder.user != null) {
+                    user = holder.user;
+                    user.setAuthProvider(authProvider);
+                    holder.context = context;
+                    holder.user = null;
+                  }
                   holder.context = context;
-                  holder.user = null;
+                  if (user != null) {
+                    context.setUser(user);
+                  }
                 }
-                holder.context = context;
-                if (user != null) {
-                  context.setUser(user);
-                }
+                addStoreSessionHandler(context, holder == null);
+              } else {
+                // never store user as there's no provider for auth
+                addStoreSessionHandler(context, false);
               }
-							addStoreSessionHandler(context, holder == null);
 
 						} else {
 							// Cannot find session - either it timed out, or was explicitly destroyed at the
@@ -276,6 +281,7 @@ public class SessionHandlerImpl implements SessionHandler {
 		cookie.setHttpOnly(sessionCookieHttpOnly);
 		// Don't set max age - it's a session cookie
 		context.addCookie(cookie);
-		addStoreSessionHandler(context, true);
+		// only store the user if there's a auth provider
+		addStoreSessionHandler(context, authProvider != null);
 	}
 }
